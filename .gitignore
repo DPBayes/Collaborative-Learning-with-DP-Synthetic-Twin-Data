@@ -1,0 +1,10 @@
+extern/
+results/
+code/slurm_outputs/*
+code/debug/*logs*
+*.out
+*.pdf
+*__pycache__*
+*.vscode*
+*paths.sh
+data/
