@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --time=12:00:00
+#SBATCH --time=6:00:00
 #SBATCH --mem=8G
 
 # Script for inferring generative models for all experiments on a system WITH SLURM support.

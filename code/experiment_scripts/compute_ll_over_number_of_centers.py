@@ -43,6 +43,7 @@ parser.add_argument("--num_repetitions", default=100, type=int, help="How many p
 parser.add_argument("--mc_seed", default=6782352, type=int)
 parser.add_argument("--num_mc_samples", default=1000, type=int)
 parser.add_argument("--num_processes", default=1, type=int)
+parser.add_argument("--cont", default=False, action='store_true', help="If set, tries to continue a previously interrupted run")
 
 args = parser.parse_args()
 print(args)
@@ -65,7 +66,15 @@ n_epochs = args.num_epochs
 
 lls_for_all_seeds = []
 
-for seed in tqdm.tqdm(range(123, 123 + 10), "seed"):
+fname_output = filenamer("lls_over_num_shared", center, args) + "_mc.p"
+fpath_output = os.path.join(args.output_path, fname_output)
+if args.cont:
+    if os.path.exists(fpath_output):
+        lls_for_all_seeds_arr = pd.read_pickle(fpath_output)
+        lls_for_all_seeds = list(lls_for_all_seeds_arr)
+
+seeds = range(123 + len(lls_for_all_seeds), 123 + 10)
+for seed in tqdm.tqdm(seeds, "seed"):
     mc_seed_key = jax.random.fold_in(mc_base_key, seed)
 
     twin_data_name = filenamer("synthetic_data", "all", args, seed=seed)
@@ -150,6 +159,4 @@ for seed in tqdm.tqdm(range(123, 123 + 10), "seed"):
     lls_for_all_seeds.append(lls_for_seed)
 
     lls_for_all_seeds_arr = np.array(lls_for_all_seeds)
-    fname_output = filenamer("lls_over_num_shared", center, args) + "_mc.p"
-    fpath_output = os.path.join(args.output_path, fname_output)
     pd.to_pickle(lls_for_all_seeds_arr, fpath_output)

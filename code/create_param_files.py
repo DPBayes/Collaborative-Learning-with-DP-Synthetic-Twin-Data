@@ -4,7 +4,7 @@ from itertools import product
 seeds = range(123, 123 + 10)
 center_sizes = ["", "0.1", "0.2", "0.5"]
 def get_epsilons(center_size):
-    if center_size == "0.1": return [1., 2.]
+    if center_size == "0.1": return [0.5, 1., 2., 4.]
     return [1.]
 
 with open("infer_models_params.txt", "w") as f:

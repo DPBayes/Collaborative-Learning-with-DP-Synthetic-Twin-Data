@@ -4,11 +4,14 @@ from numpyro.infer.autoguide import AutoDiagonalNormal
 import jax.numpy as jnp
 import numpy as np
 import pandas as pd
-from twinify.mixture_model import MixtureModel
 import argparse
 from typing import Iterable
 from collections import OrderedDict
 from functools import partial
+
+import sys
+sys.path.append("./twinify_models")
+from mixture_model import MixtureModel
 
 reference_groups = OrderedDict(
     age_group="[40, 45)",
@@ -36,7 +39,7 @@ def postprocess(posterior_samples, ori_df):
     syn_X = posterior_samples['X']
     syn_y = posterior_samples['y']
     syn_data = jnp.hstack([syn_X, syn_y[:, np.newaxis]])
-    syn_df = pd.DataFrame(syn_data, columns = [
+    syn_df = pd.DataFrame(np.array(syn_data), columns = [
         'age_group', 'sex', 'ethnicity', 'deprivation', 'education', 'covid_test_result'
     ])
 

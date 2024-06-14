@@ -4,8 +4,8 @@
 #SBATCH --mem=70G
 
 # Script for running the analysis task combining local data and synthetic data for all experiments on a system WITH SLURM support.
-# If SLURM is NOT available, use run_03_lls_over_num_shared.sh instead.
-# Produces results for Fig 1-4.
+# If SLURM is NOT available, use run_04_lls_over_num_shared_skewed.sh instead.
+# Produces results for Fig 5.
 
 
 ## Parameters to set manually
@@ -13,6 +13,7 @@ n_epochs=4000
 clipping_threshold=2.0
 num_reps="100"
 continue_flag="--cont" # Continue previously interrupted computation; clear to overwrite any previous partial results
+skew_category="SouthAsian"
 
 module load anaconda
 source paths.sh
@@ -21,7 +22,7 @@ set -e # stop script if any command errors
 source activate collaborative-learning-with-syn-data
 export PYTHONUNBUFFERED=1
 
-params_file="lls_run_params.txt"
+params_file="lls_skewed_run_params.txt"
 
 n=$SLURM_ARRAY_TASK_ID
 center=`sed -n "${n} p" ${params_file} | awk '{print $1}'`
@@ -35,9 +36,9 @@ if [ -z $max_center_size ]; then
     max_center_size_sfx="";
 fi
 
-test_data_path="${UKB_BASE_FOLDER}/processed_data/model_one_covid_tested_data_test020.csv"
-test_output_sfx=""
-input_data_path="${UKB_BASE_FOLDER}/processed_data/model_one_covid_tested_data_train080$max_center_size_sfx.csv"
+test_data_path="${UKB_BASE_FOLDER}/processed_data/model_one_covid_tested_data_test020.csv.B_${skew_category}"
+test_output_sfx="/skewed/${skew_category}/testonly"
+input_data_path="${UKB_BASE_FOLDER}/processed_data/model_one_covid_tested_data_test020_splitA_skewed${skew_category}.csv"
 
 path_base="${UKB_BASE_FOLDER}/synthetic_data"
 syn_data_dir="${path_base}/twin_data/"

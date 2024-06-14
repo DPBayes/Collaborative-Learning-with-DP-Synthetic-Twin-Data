@@ -80,17 +80,20 @@ class PXGradientSVI(SVI):
             self.model, one_element_batch, model_kwargs, params
         )
         self.total_number_samples = len(one_element_batch[0]) * observation_scale
-        self.batch_size = jnp.shape(args[0])[0]
+        assert(len(one_element_batch[0])) == 1
 
         return DPSVIState(svi_state.optim_state, rng_key, observation_scale=1.)
 
-    def _compute_per_example_gradients(self, dp_svi_state, *args, **kwargs):
+    def _compute_per_example_gradients(self, dp_svi_state, *args, mask=True, **kwargs):
         """ Computes the raw per-example gradients of the model.
 
         This is the first step in a full update iteration.
 
         :param dp_svi_state: The current state of the DPSVI algorithm.
         :param args: Arguments to the loss function.
+        :param mask: A mask to indicate which elements should be considered for the update.
+            Boolean or batch-sized vector of booleans. True indicates that the element
+            of the batch is used, False indicates that it will be ignored.
         :param kwargs: All keyword arguments to model or guide.
         :returns: tuple consisting of the updated DPSVI state, an array of loss
             values per example, and a jax tuple tree of per-example gradients
@@ -103,17 +106,28 @@ class PXGradientSVI(SVI):
 
         # we wrap the per-example loss (ELBO) to make it easier "digestable"
         # for jax.vmap(jax.value_and_grad()): slighly reordering parameters; fixing kwargs, model and guide
-        def wrapped_px_loss(prms, rng_key, loss_args):
+        def wrapped_px_loss(prms, rng_key, loss_args, mask):
             # vmap removes leading dimensions, we re-add those in a wrapper for fun so
             # that fun can be oblivious of this
             new_args = (jnp.expand_dims(arg, 0) for arg in loss_args)
             return self.loss.loss(
                 rng_key, self.constrain_fn(prms), self.model, self.guide,
                 *new_args, **kwargs, **self.static_kwargs
-            )
+            ) * mask
+        
+        # if we use a mask to eliminate batch elements (e.g. for Poisson sampling), then we need to consider that
+        # there are fewer elements than the shape suggests!
+        max_batch_size = len(args[0])
+        if isinstance(mask, bool):
+            mask_vmap_ax = None
+            num_elements = max_batch_size * mask
+        else:
+            mask_vmap_ax = 0
+            num_elements = jnp.sum(mask)
+        batch_mask_scaling_factor = jnp.where(num_elements == 0, 0., max_batch_size / num_elements)
 
-        px_value_and_grad = jax.vmap(jax.value_and_grad(wrapped_px_loss), in_axes=(None, None, 0))
-        per_example_loss, per_example_grads = px_value_and_grad(params, jax_rng_key, args)
+        px_value_and_grad = jax.vmap(jax.value_and_grad(wrapped_px_loss), in_axes=(None, None, 0, mask_vmap_ax))
+        per_example_loss, per_example_grads = px_value_and_grad(params, jax_rng_key, args, mask)
 
         # the scaling of likelihood contributions with total number of samples makes it difficult to
         # keep clipping comparable between data sets of different size. Thus we will scale our gradients
@@ -121,7 +135,7 @@ class PXGradientSVI(SVI):
         # gradient of the entropy later!
         per_example_grads = {key: value / self.total_number_samples for key, value in per_example_grads.items()}
 
-        return dp_svi_state, per_example_loss, per_example_grads
+        return dp_svi_state, per_example_loss, per_example_grads, batch_mask_scaling_factor
 
     def _apply_gradient(self, dp_svi_state, batch_gradient):
         """ Takes a (batch) gradient step in parameter space using the specified
@@ -282,13 +296,16 @@ class AlignedGradientDPSVI(PXGradientSVI):
 
         return dp_svi_state, perturbed_grads_dict
 
-    def update(self, orig_svi_state, *args, **kwargs):
+    def update(self, orig_svi_state, *args, mask=True, **kwargs):
         """ Takes a single step of SVI (possibly on a batch / minibatch of data),
         using the optimizer.
 
         :param svi_state: Current state of SVI.
         :param args: Arguments to the model / guide (these can possibly vary during
             the course of fitting).
+        :param mask: A mask to indicate which elements should be considered for the update.
+            Boolean or batch-sized vector of booleans. True indicates that the element
+            of the batch is used, False indicates that it will be ignored.
         :param kwargs: Keyword arguments to the model / guide (these can possibly vary
             during the course of fitting).
         :return: Tuple of `(svi_state, loss)`, where `svi_state` is the updated
@@ -297,8 +314,8 @@ class AlignedGradientDPSVI(PXGradientSVI):
         """
 
         ## compute the per-example gradients
-        svi_state, per_example_loss, per_example_grads = \
-            self._compute_per_example_gradients(orig_svi_state, *args, **kwargs)
+        svi_state, per_example_loss, per_example_grads, batch_mask_scaling_factor = \
+            self._compute_per_example_gradients(orig_svi_state, *args, mask=mask, **kwargs)
 
         ## gather the MCMC draw used in ELBO estimation for the scale aligning
         # first replay the randomness
@@ -321,10 +338,14 @@ class AlignedGradientDPSVI(PXGradientSVI):
 
         # compute avg elbo
         loss = jnp.mean(per_example_loss)
+        loss *= batch_mask_scaling_factor
 
         # perturb the gradients
-        avg_clipped_loc_grad = jnp.mean(px_clipped_loc_grads, axis=0)
-        l2_sensitivity = clipping_threshold * (1. / self.batch_size)
+        max_batch_size = len(args[0])
+        num_elements = max_batch_size / batch_mask_scaling_factor
+        avg_clipped_loc_grad = jnp.mean(px_clipped_loc_grads, axis=0) * batch_mask_scaling_factor
+        # batch_mask_scaling_factor=(max_batch_size/num_elements) corrects for masked out examples in the batch
+        l2_sensitivity = clipping_threshold * (1. / num_elements)
         svi_state, gradient = self._perturb_and_reassemble_gradients(
             svi_state, avg_clipped_loc_grad, l2_sensitivity, guide_trace
         )

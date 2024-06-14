@@ -1,4 +1,4 @@
-# Collaborative Learning from Distributed Data with Differentially Private Synthetic Twin Data
+# Collaborative Learning from Distributed Data with Differentially Private Synthetic Data
 
 ## Python Environment
 
@@ -21,13 +21,11 @@ code/
 - `create_param_files.py`: Run to create list of parameters required by the following scripts.
 - `run_01_infer_models.sh`: Run to infer parameters of the generative models for all paper experiments.
 - `run_02_generative_twin_data.sh`: Run to generative synthetic twin data from the generative models for all paper experiments.
-- `run_03_lls_over_num_shared.sh`: Run to perform the analysis task on combined local and synthetic data for all paper experiments.
-- `run_04_plotting.sh`: Run to create the plots in the paper.
+- `run_03_lls_over_num_shared.sh`: Run to perform the analysis task on combined local and synthetic data for paper experiment for figures 1-4 and 6.
+- `run_04_lls_over_num_shared.sh`: Run to perform the analysis task on combined local and synthetic data for all paper experiments for figure 5.
+- `run_05_plotting.sh`: Run to create the plots in the paper.
 
 If you have access to a system equipped with the SLURM workload manager, use the files prefixed `slurm_` instead of `run_`.
-
-Note: `run_03_lls_over_num_shared.sh` (or its corresponding slurm file) must be edited manually after being run once to create the results
-for Figure 5 (see instructions in the file).
 
 ## Data Layout
 

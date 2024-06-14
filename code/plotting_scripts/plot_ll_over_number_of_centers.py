@@ -220,7 +220,7 @@ if center == "all":
 else:
     fig.suptitle(f"More parties sharing improves analysis\n Local center is {center}")
 
-fig.savefig(os.path.join(args.output_path, f"{args.test_type}_over_num_shared_{center}_max{int(args.max_center_size) if args.max_center_size >= 1 else args.max_center_size}_mc_{args.plot_variant}.pdf"), format="pdf")
+fig.savefig(os.path.join(args.output_path, f"{args.test_type}_over_num_shared_{center}_eps{epsilon}_max{int(args.max_center_size) if args.max_center_size >= 1 else args.max_center_size}_mc_{args.plot_variant}.pdf"), format="pdf")
 plt.close()
-p_vals.to_csv(os.path.join(args.output_path, f"{args.test_type}_over_num_shared_{center}_max{int(args.max_center_size) if args.max_center_size >= 1 else args.max_center_size}_mc.csv"), header=True)
+p_vals.to_csv(os.path.join(args.output_path, f"{args.test_type}_over_num_shared_{center}_eps{epsilon}_max{int(args.max_center_size) if args.max_center_size >= 1 else args.max_center_size}_mc.csv"), header=True)
 

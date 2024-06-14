@@ -5,8 +5,8 @@ import pandas as pd
 
 from numpyro.optim import Adam
 
-from d3p.minibatch import subsample_batchify_data,  q_to_batch_size
-from d3p.dputil import approximate_sigma_remove_relation, approximate_sigma
+from d3p.minibatch import q_to_batch_size, poisson_batchify_data, batch_size_to_q
+from d3p.dputil import approximate_sigma_remove_relation
 
 from twinify.model_loading import load_custom_numpyro_model
 from twinify.infer import InferenceException
@@ -60,18 +60,19 @@ def _train_model(rng, rng_suite, svi, data, batch_size, num_data, num_epochs, si
     assert(type(data) == tuple)
     from twinify.infer import _cast_data_tuple
     data = _cast_data_tuple(data)
-    init_batching, get_batch = subsample_batchify_data(data, batch_size, rng_suite=rng_suite)
+    q = batch_size_to_q(batch_size, num_data)
+    init_batching, get_batch = poisson_batchify_data(data, q, .99, rng_suite=rng_suite)
     _, batchify_state = init_batching(init_batch_rng)
 
-    batch = get_batch(0, batchify_state)
+    batch, _ = get_batch(0, batchify_state)
     svi_state = svi.init(svi_rng, *batch)
 
     @jax.jit
     def train_epoch(num_iters_for_epoch, svi_state, batchify_state):
         def update_iteration(i, state_and_loss):
             svi_state, loss = state_and_loss
-            batch = get_batch(i, batchify_state)
-            svi_state, iter_loss = svi.update(svi_state, *batch)
+            batch, mask = get_batch(i, batchify_state)
+            svi_state, iter_loss = svi.update(svi_state, *batch, mask=mask)
             return (svi_state, loss + iter_loss / num_iters_for_epoch)
 
         return jax.lax.fori_loop(0, num_iters_for_epoch, update_iteration, (svi_state, 0.))
@@ -108,10 +109,11 @@ def run_inference(args, train_data, model, guide):
     inference_rng, sampling_rng, numpy_random_state = initialize_rngs(args.seed)
 
     if args.epsilon != 'non_dp':
+        delta = 1e-6
         num_total_iters = np.ceil(args.num_epochs / args.sampling_ratio)
-        dp_scale, _, _ = approximate_sigma(
+        dp_scale, _, _ = approximate_sigma_remove_relation(
                 float(args.epsilon),
-                1./num_data,
+                delta,
                 args.sampling_ratio,
                 num_total_iters
         )
